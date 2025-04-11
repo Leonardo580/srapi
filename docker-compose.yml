@@ -1,0 +1,86 @@
+services:
+
+  setup:
+    profiles:
+      - setup
+    build:
+      context: setup/
+    init: true
+    volumes:
+      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./setup/lib.sh:/lib.sh:ro,Z
+      - ./setup/roles:/roles:ro,Z
+    environment:
+      ELASTIC_PASSWORD: UicU@bkui%[H
+      LOGSTASH_INTERNAL_PASSWORD: UicU@bkui%[H
+      KIBANA_SYSTEM_PASSWORD: UicU@bkui%[H
+      METRICBEAT_INTERNAL_PASSWORD: UicU@bkui%[H
+      FILEBEAT_INTERNAL_PASSWORD: UicU@bkui%[H
+      HEARTBEAT_INTERNAL_PASSWORD: UicU@bkui%[H
+      MONITORING_INTERNAL_PASSWORD: UicU@bkui%[H
+      BEATS_SYSTEM_PASSWORD: UicU@bkui%[H
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  elasticsearch:
+    build:
+      context: elasticsearch/
+    volumes:
+      - ./volumes/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./volumes/elasticsearch:/usr/share/elasticsearch/data:Z
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: UicU@bkui%[H
+
+      discovery.type: single-node
+    networks:
+      - elk
+    restart: unless-stopped
+
+  logstash:
+    build:
+      context: logstash/
+    volumes:
+      - ./volumes/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./volumes/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+    ports:
+      - 5044:5044
+      - 50000:50000/tcp
+      - 50000:50000/udp
+      - 9600:9600
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: UicU@bkui%[H
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  kibana:
+    build:
+      context: kibana/
+    volumes:
+      - ./volumes/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: UicU@bkui%[H
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  elasticsearch:
