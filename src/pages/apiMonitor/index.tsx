@@ -4,6 +4,10 @@ import { CheckCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined } f
 import APIGridTable from "./ag-table";
 import TotalCard from "./total-card";
 import AreaDownload from "./area-download";
+import { useCallback, useState } from "react";
+import axios, { AxiosRequestConfig } from "axios";
+import { toast } from "sonner";
+
 const columns = [
 	{
 		title: "Timestamp",
@@ -98,7 +102,146 @@ const dummyTableData = [
 	},
 ];
 
+const ELASTICSEARCHURL = "http://localhost:9200";
+const ELATCIEARCH_INDEX = "index";
+// const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
+const ELASTICSEARCH_ENDPOINT = "/elasticsearch/.ds-kibana_sample_data_logs-2025.03.27-000001/_search";
+
 function APIMonitor() {
+	const [cardData, setCardData] = useState({
+		loading: true,
+		count: 0,
+		percent: "0%",
+		increase: false,
+		chartData: [],
+	});
+
+	const data = {
+		loading: true,
+		count: 0,
+		percent: "0%",
+		increase: false,
+		chartData: [],
+	};
+
+	const fetchData = useCallback(async () => {
+		const esQuery = {
+			size: 0,
+			query: {
+				range: {
+					timestamp: {
+						gte: "now-1d/d",
+						lte: "now/d",
+					},
+				},
+			},
+		};
+
+		const config: AxiosRequestConfig = {
+			headers: {
+				"Content-Type": "application/json",
+				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+			},
+		};
+		try {
+			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
+			if (response.status == 200) {
+				data.percent = response.data?.total?.value;
+				console.log("Formatted Data:", formattedData);
+			} else {
+				console.warn("No hits found in Elasticsearch response or response format unexpected.");
+				// Set empty data if no hits
+			}
+			console.log("elastic search response: ", response.data);
+		} catch (e) {
+			toast.error(e.message);
+		}
+	}, []);
+	let prevPercent = 0;
+	const fetchData = useCallback(async () => {
+		const esQuery = {
+			size: 0,
+			query: {
+				range: {
+					timestamp: {
+						gte: "now-2d/d",
+						lt: "now-1d/d",
+					},
+				},
+			},
+		};
+
+		const config: AxiosRequestConfig = {
+			headers: {
+				"Content-Type": "application/json",
+				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+			},
+		};
+		try {
+			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
+			if (response.status == 200) {
+				prevPercent = response.data?.total?.value;
+			} else {
+				console.warn("No hits found in Elasticsearch response or response format unexpected.");
+				// Set empty data if no hits
+			}
+			console.log("elastic search response: ", response.data);
+		} catch (e) {
+			toast.error(e.message);
+		}
+	}, []);
+	let chartdata;
+	const fetchData = useCallback(async () => {
+		const esQuery = {
+			size: 0,
+			query: {
+				range: {
+					timestamp: {
+						gte: "now-7d/d",
+						lte: "now/d",
+					},
+				},
+			},
+			aggs: {
+				requests_over_time: {
+					date_histogram: {
+						field: "timestamp",
+						calendar_interval: "day",
+						min_doc_count: 0,
+					},
+				},
+			},
+		};
+
+		const config: AxiosRequestConfig = {
+			headers: {
+				"Content-Type": "application/json",
+				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+			},
+		};
+		try {
+			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
+			if (response.status == 200) {
+				chartdata = response.data?.aggregations.requests_over_time.buckets.map((bucket) => bucket.doc_count);
+			} else {
+				console.warn("No hits found in Elasticsearch response or response format unexpected.");
+				// Set empty data if no hits
+			}
+			console.log("elastic search response: ", response.data);
+		} catch (e) {
+			toast.error(e.message);
+		}
+	}, []);
+	const percentChange = prevPercent > 0 ? ((data.count - prevPercent) / prevPercent) * 100 : 100;
+
+	setCardData({
+		loading: false,
+		count: data.count,
+		percent: `${Math.abs(percentChange)}%`,
+		increase: percentChange >= 0,
+		chartData: chartdata,
+	});
+
 	return (
 		<div className="p-2">
 			<Row justify="center">
@@ -108,7 +251,7 @@ function APIMonitor() {
 					</Card>
 				</Col>
 			</Row>
-			<Row gutter={[16, 16]} className="mt-8">
+			<Row gutter={[16, 16]} className="mt-8" justify="space-between">
 				<Col span={24} md={8}>
 					<TotalCard
 						title="Total API requests"

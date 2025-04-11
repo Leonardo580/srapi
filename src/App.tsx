@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 
-import Logo from "@/assets/images/logo.png";
+import Logo from "@/assets/images/sra-logo.png";
 import Router from "@/router/index";
 
 import { MotionLazy } from "./components/animate/motion-lazy";
@@ -13,7 +13,8 @@ function App() {
 		<ThemeProvider adapters={[AntdAdapter]}>
 			<MotionLazy>
 				<Helmet>
-					<title>Slash Admin</title>
+					<title>SRAPI</title>
+
 					<link rel="icon" href={Logo} />
 				</Helmet>
 				<Toast />
