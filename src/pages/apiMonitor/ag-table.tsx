@@ -13,46 +13,23 @@ import { themeQuartz } from "ag-grid-community";
 import { AllCommunityModule } from "ag-grid-community";
 import axios, { type AxiosRequestConfig, type AxiosError } from "axios";
 import { toast } from "sonner";
-const darkTheme = themeQuartz.withParams({
-	backgroundColor: "#1f2836",
-	browserColorScheme: "dark",
-	chromeBackgroundColor: {
-		ref: "foregroundColor",
-		mix: 0.07,
-		onto: "backgroundColor",
-	},
-	fontFamily: "inherit",
-	fontSize: 15,
-	foregroundColor: "#FFF",
-	headerFontSize: 14,
-});
-const lightTheme = themeQuartz.withParams({
-	backgroundColor: "#ffffff",
-	browserColorScheme: "light",
-	chromeBackgroundColor: {
-		ref: "foregroundColor",
-		mix: 0.07,
-		onto: "backgroundColor",
-	},
-	fontFamily: "inherit",
-	fontSize: 15,
-	foregroundColor: "#000",
-	headerFontSize: 14,
-});
 
 const ELASTICSEARCHURL = "http://localhost:9200";
-const ELATCIEARCH_INDEX = "index";
+const ELATCIEARCH_INDEX = "test";
 // const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
-const ELASTICSEARCH_ENDPOINT = "/elasticsearch/.ds-kibana_sample_data_logs-2025.03.27-000001/_search";
+const ELASTICSEARCH_ENDPOINT = "/elasticsearch/test_grokked/_search";
 
 const FETECHSZE = 100;
 
 interface ApiLog {
 	timestamp: string | number; // Adjust based on how it's stored in ES (string ISO date or epoch ms)
-	endpoint: string;
+	client_ip: string;
+	duration: number;
+	level: string;
 	method: string;
+	service_ip: string;
 	status: number;
-	responseTime: number;
+	port: string;
 
 	_id?: string; // Keep the ES document ID if needed
 }
@@ -94,7 +71,6 @@ const APIGridTable = () => {
 				match_all: {},
 			},
 			sort: [{ "@timestamp": { order: "desc" } }],
-			_source: ["@timestamp", "request", "response", "clientip", "bytes"],
 		};
 		const config: AxiosRequestConfig = {
 			headers: {
@@ -109,7 +85,7 @@ const APIGridTable = () => {
 			if (hits && Array.isArray(hits)) {
 				const formattedData: ApiLog[] = hits.map((hit: any) => ({
 					_id: hit._id, // Store ES document ID
-					status: hit._source["response"],
+
 					...hit._source,
 					// Ensure timestamp is a number (milliseconds) for sorting/formatting if needed
 					timestamp:
@@ -155,8 +131,8 @@ const APIGridTable = () => {
 				width: 200,
 			},
 			{
-				headerName: "Requested Path", // Updated header
-				field: "request", // Field name from ApiLogData (mapped from 'request')
+				headerName: "Server @IP", // Updated header
+				field: "server_ip", // Field name from ApiLogData (mapped from 'request')
 				sortable: true,
 				filter: "agTextColumnFilter",
 				floatingFilter: true,
@@ -174,21 +150,27 @@ const APIGridTable = () => {
 			},
 			{
 				headerName: "Client IP",
-				field: "clientip", // Field name from ApiLogData
+				field: "client_ip", // Field name from ApiLogData
 				sortable: true,
 				filter: "agTextColumnFilter",
 				floatingFilter: true,
 				width: 150,
 			},
 			{
-				headerName: "Size", // Simpler header
-				field: "bytes", // Field name from ApiLogData
+				headerName: "Port", // Simpler header
+				field: "port", // Field name from ApiLogData
 				sortable: true,
 				filter: "agNumberColumnFilter",
 				floatingFilter: true,
-				valueFormatter: (params) => formatBytes(params.value), // Use bytes formatter
+				//valueFormatter: (params) => formatBytes(params.value), // Use bytes formatter
 				cellStyle: { textAlign: "right" },
 				width: 130,
+			},
+			{
+				headerName: "Level",
+				field: "level",
+				sortable: true,
+				filter: "agTextColumnFilter",
 			},
 			{
 				headerName: "Actions",
@@ -223,51 +205,6 @@ const APIGridTable = () => {
 		// Optionally apply initial size/state on ready if needed
 		// params.api.autoSizeAllColumns(); // Example: Auto-size columns on load
 	}, []);
-
-	// Custom Cell Renderer for Status Column (similar to Ant Design Tag)
-
-	/*
-	const dummyGridData = useMemo(
-		() => [
-			{
-				timestamp: Date.now() - 60000,
-				endpoint: "/users",
-				method: "GET",
-				status: 200,
-				responseTime: 120,
-			},
-			{
-				timestamp: Date.now() - 120000,
-				endpoint: "/products",
-				method: "POST",
-				status: 201,
-				responseTime: 85,
-			},
-			{
-				timestamp: Date.now() - 180000,
-				endpoint: "/orders/123",
-				method: "GET",
-				status: 404,
-				responseTime: 55,
-			},
-			{
-				timestamp: Date.now() - 240000,
-				endpoint: "/analytics",
-				method: "GET",
-				status: 500,
-				responseTime: 250,
-			},
-			{
-				timestamp: Date.now() - 300000,
-				endpoint: "/auth/login",
-				method: "POST",
-				status: 200,
-				responseTime: 90,
-			},
-		],
-		[],
-	);
-*/
 
 	const formatBytes = (bytes, decimals = 2) => {
 		if (bytes === null || bytes === undefined || bytes === 0) return "0 B";
