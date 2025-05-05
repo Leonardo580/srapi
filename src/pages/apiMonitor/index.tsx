@@ -9,9 +9,9 @@ import axios, { AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
 
 const ELASTICSEARCHURL = "http://localhost:9200";
-const ELATCIEARCH_INDEX = "index";
+const ELATCIEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
 // const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
-const ELASTICSEARCH_ENDPOINT = "/elasticsearch/test/_search";
+const ELASTICSEARCH_ENDPOINT = `/elasticsearch/${ELATCIEARCH_INDEX}/_search`;
 
 function APIMonitor() {
 	const [cardData, setCardData] = useState({
@@ -41,7 +41,7 @@ function APIMonitor() {
 		const config: AxiosRequestConfig = {
 			headers: {
 				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+				authorization: "Basic " + btoa("elastic:changeme"),
 			},
 		};
 		try {
@@ -81,7 +81,7 @@ function APIMonitor() {
 		const config: AxiosRequestConfig = {
 			headers: {
 				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+				authorization: "Basic " + btoa("elastic:changeme"),
 			},
 		};
 		try {
@@ -119,7 +119,7 @@ function APIMonitor() {
 		const config: AxiosRequestConfig = {
 			headers: {
 				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:yL1lO7VVo2c6"),
+				authorization: "Basic " + btoa("elastic:changeme"),
 			},
 		};
 		try {

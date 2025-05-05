@@ -44,8 +44,11 @@ export default defineConfig(({ mode }) => {
 
 		server: {
 			open: true,
-			host: true,
-			port: 3001,
+			host: "0.0.0.0",
+			port: 3000,
+			watch: {
+				usePooling: true,
+			},
 			proxy: {
 				"/api": {
 					target: "http://localhost:3000",
@@ -54,7 +57,7 @@ export default defineConfig(({ mode }) => {
 					secure: false,
 				},
 				"/elasticsearch": {
-					target: "http://localhost:9200",
+					target: "https://localhost:9200",
 					changeOrigin: true,
 					rewrite: (path) => path.replace(/^\/elasticsearch/, ""),
 					secure: false,
