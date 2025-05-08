@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { ColDef, GridApi, GridReadyEvent, ValueFormatterParams } from "ag-grid-community";
+import {
+	ColDef,
+	GridApi,
+	GridReadyEvent,
+	IServerSideDatasource,
+	ISetFilterParams,
+	IServerSideRowModel,
+	ValueFormatterParams
+} from "ag-grid-community";
 import { Button, Card, Checkbox, Col, ConfigProvider, Row, Tag, theme, Tooltip, Spin } from "antd";
 import Icon, {
 	MoreOutlined,
@@ -9,12 +17,13 @@ import Icon, {
 	CloseCircleOutlined,
 } from "@ant-design/icons";
 import "ag-grid-community/styles/ag-theme-quartz.css";
-import { AllCommunityModule } from "ag-grid-community";
+import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import axios, { type AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
 
-import ColumnManager from "./ColumnManager"; // Import the new component
-
+import ColumnManager from "./ColumnManager";
+import ElasticService from "@/api/services/elasticService.ts"; // Import the new component
+ModuleRegistry.registerModules([AllCommunityModule]);
 const ELASTICSEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
 // Use a simpler query for initial testing if needed, or keep your specific one
 // const ELASTICSEARCH_ENDPOINT = `/elasticsearch/${ELASTICSEARCH_INDEX}/_search`;
@@ -38,7 +47,7 @@ const getDisplayName = (field: string): string => {
 const formatTimestamp = (params: ValueFormatterParams): string => {
 	if (params.value == null) return "";
 	const date = new Date(params.value);
-	return isNaN(date.getTime()) ? String(params.value) : date.toLocaleString();
+	return isNaN(date.getTime()) ? String(params.value) : date.toLocaleString("en-US", {hour12: false});
 };
 
 const StatusCellRenderer = (params: { value: number }) => {
@@ -159,29 +168,29 @@ const APIGridTable = () => {
 	); // Empty dependency array as renderers/formatters are stable
 
 	// --- Data Fetching ---
-	const fetchData = useCallback(async () => {
+
+	const [currentPage, setCurrentPage] = useState<number>(1);
+	const [pageSize, setPageSize] = useState<number>(50);
+	const [totalPagesFromBackend, setTotalPagesFromBackend] = useState<number>(0);
+	const [totalItemsFromBackend, setTotalItemsFromBackend] = useState<number>(0);
+	const [hasMoreData, setHasMoreData] = useState<boolean>(true);
+	const fetchData = useCallback(async (pageToFetch: number, isInitialLoad = false) => {
+		if (isLoading) return;
+		if (!isInitialLoad && !hasMoreData && pageToFetch > currentPage) {
+			toast.info("No more data to fetch");
+			return;
+		}
 		setIsLoading(true);
 		gridApiRef.current?.setGridOption("loading", true); // Show grid loading overlay
-		const esQuery = {
-			size: FETCH_SIZE,
-			query: {
-				match_all: {}, // Keep it simple or use your specific query
-			},
-			// Use _source: true to get all fields, or specify fields if needed
-			_source: true,
-			sort: [{ "@timestamp": { order: "desc" } }], // Common sorting field
-		};
-		const config: AxiosRequestConfig = {
-			headers: {
-				"Content-Type": "application/json",
-				// Consider making auth configurable or use environment variables
-				authorization: "Basic " + btoa("elastic:changeme"),
-			},
-		};
 
 		try {
-			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
-			const hits = response.data?.hits?.hits;
+			const response = await ElasticService.getData(currentPage, pageSize);
+			const hits = response.data.data;
+			console.log(hits);
+			setTotalItemsFromBackend(response.data.total);
+			setTotalPagesFromBackend(response.data.totalPages);
+			setCurrentPage(currentPage);
+			setHasMoreData((response.data.page < response.data.totalPages));
 
 			if (hits && Array.isArray(hits) && hits.length > 0) {
 				const discoveredFields = new Set<string>();
@@ -209,7 +218,6 @@ const APIGridTable = () => {
 					const defaultVisible = [
 						"@timestamp",
 						"level",
-						"message",
 						"http.response.status_code",
 						"http.request.method",
 						"url.original",
@@ -227,7 +235,7 @@ const APIGridTable = () => {
 				}
 
 				setRowData(formattedData);
-				gridApiRef.current?.hideOverlay(); // Hide grid loading overlay
+				gridApiRef.current?.setGridOption("loading", false); // Hide grid loading overlay
 			} else {
 				console.warn("No hits found or unexpected format.");
 				setRowData([]);
@@ -246,8 +254,22 @@ const APIGridTable = () => {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [visibleFields.length]); // Re-run fetch won't reset visible fields unless length is 0
+	}, [isLoading, pageSize, hasMoreData, currentPage, allAvailableFields, visibleFields.length]); // Re-run fetch won't reset visible fields unless length is 0
 
+	const handleSearchOrFilterChanges = () => {
+		setCurrentPage(1);
+		setHasMoreData(true);
+		fetchData(1, true);
+	}
+	const loadMoreData = () => {
+		if (hasMoreData && !isLoading) {
+			fetchData(currentPage + 1 , false);
+		}
+		else if (!hasMoreData ) {
+			toast.info("No more data found");
+		}
+
+	}
 	useEffect(() => {
 		fetchData();
 		// Intentionally not including fetchData in dependencies to avoid loops
@@ -332,10 +354,9 @@ const APIGridTable = () => {
 	const onGridReady = useCallback(
 		(params: GridReadyEvent) => {
 			console.log("Grid Ready");
-			gridApiRef.current = params.api;
-			if (isLoading) {
-				params.api.setGridOption("loading", true);
-			}
+			gridApiRef.current = params.api
+			params.api.setGridOption("loading", isLoading);
+
 		},
 		[isLoading],
 	);
@@ -344,14 +365,16 @@ const APIGridTable = () => {
 	const handleVisibilityChange = useCallback((newVisibleFields: string[]) => {
 		setVisibleFields(newVisibleFields);
 	}, []);
-
+	console.log(hasMoreData);
 	return (
 		<div>
 			{/* Add Refresh Button */}
-			<Button onClick={fetchData} loading={isLoading} style={{ marginBottom: 16 }}>
+			<Button onClick={handleSearchOrFilterChanges} loading={isLoading} style={{ marginBottom: 16 }}>
 				Refresh Data
 			</Button>
-
+			<Button onClick={loadMoreData} disabled={isLoading || !hasMoreData}>
+				{isLoading ? `Loading...`: (hasMoreData ? `Load More Data` :`All data are loaded`) }
+			</Button>
 			{/* Column Manager */}
 			<ColumnManager
 				allFields={allAvailableFields}
@@ -374,15 +397,15 @@ const APIGridTable = () => {
 				<AgGridReact<LogData> // Use generic LogData type
 					key={visibleFields.join("-")} // Force re-render if columns fundamentally change (optional but can help)
 					columnDefs={columnDefs}
-					rowData={rowData}
 					defaultColDef={defaultColDef}
 					onGridReady={onGridReady}
+					rowData={rowData}
+					autoGroupColumnDef={{minWidth: 200}}
 					modules={[AllCommunityModule]} // Use combined modules package
-					pagination={true}
-					paginationPageSize={25}
-					paginationPageSizeSelector={[10, 25, 50, 100, 500]}
 					animateRows={true} // Optional: Add animation
-					// Grid options
+					pagination={true}
+					paginationPageSize={25} // How many rows AG Grid shows per page (from loaded rowData)
+					paginationPageSizeSelector={[10, 25, 50, 100, 250]}
 					overlayLoadingTemplate='<span class="ag-overlay-loading-center">Loading...</span>'
 					overlayNoRowsTemplate='<span style="padding: 10px;">No logs found.</span>'
 					// Consider 'fitGridWidth' or remove if causing issues
