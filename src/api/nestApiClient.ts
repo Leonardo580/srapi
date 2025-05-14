@@ -1,15 +1,10 @@
 import axios, { type AxiosRequestConfig, type AxiosError, type AxiosResponse } from "axios";
 
-import { t } from "@/locales/i18n";
-import userStore from "@/store/userStore";
-
-import { toast } from "sonner";
 import type { Result } from "#/api";
-import { ResultEnum } from "#/enum";
 
-// 创建 axios 实例
+
 const axiosInstance = axios.create({
-	baseURL: import.meta.env.VITE_APP_BASE_API,
+	baseURL: import.meta.env.VITE_APP_BASE_ELASTICSEARCH,
 	timeout: 50000,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });

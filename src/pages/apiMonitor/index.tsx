@@ -138,19 +138,7 @@ function APIMonitor() {
 		}
 	}, []);
 
-	useEffect(() => {
-		fetchPrevData();
-		fetchChartData();
-		fetchData();
 
-		window.addEventListener("error", (e) => console.log("uncaught error", e));
-		window.addEventListener("unhandledRejection", (e) => console.log("unhandled promises", e.reason));
-
-		return () => {
-			window.removeEventListener("error", (e) => console.log("uncaught error", e));
-			window.removeEventListener("unhandledRejection", (e) => console.log("unhandled promises", e.reason));
-		};
-	}, [fetchData, fetchPrevData, fetchChartData]);
 
 	return (
 		<div className="p-2">
