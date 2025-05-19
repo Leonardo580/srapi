@@ -62,6 +62,12 @@ export default defineConfig(({ mode }) => {
 					rewrite: (path) => path.replace(/^\/elasticsearch/, ""),
 					secure: false,
 				},
+				"/test": {
+					target: "https://localhost:9200",
+					changeOrigin: true,
+					rewrite: (path) => path.replace(/^\/test/, ""),
+					secure: false,
+				},
 			},
 		},
 

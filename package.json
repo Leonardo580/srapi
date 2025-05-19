@@ -20,6 +20,7 @@
 		"@elastic/react-search-ui": "^1.23.1",
 		"@elastic/react-search-ui-views": "^1.23.1",
 		"@elastic/search-ui": "^1.23.1",
+		"@elastic/search-ui-elasticsearch-connector": "^1.23.1",
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.0",
 		"@fontsource-variable/inter": "^5.1.0",

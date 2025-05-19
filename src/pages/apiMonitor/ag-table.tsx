@@ -19,7 +19,7 @@ import ElasticService, {
     FieldFilterType,
 } from '@/api/services/elasticService.ts'; // Adjust path
 
-// Your LogEntry interface (same as before)
+
 export interface LogEntry {
     _id: string;
     '@timestamp': string;
@@ -214,8 +214,12 @@ const LogsTable: React.FC = () => {
 
 
     return (
-        <ThemeProvider theme={muiTheme}>
-            <CssBaseline /> {/* Ensures baseline Material UI styles */}
+
+        <div>
+
+
+            <ThemeProvider theme={muiTheme}>
+            <CssBaseline/> {/* Ensures baseline Material UI styles */}
             <MaterialReactTable
                 columns={columns}
                 data={data}
@@ -245,19 +249,19 @@ const LogsTable: React.FC = () => {
                 initialState={{
                     showColumnFilters: true, // Show filters by default
                     density: 'compact',
-                    pagination: { pageIndex: 0, pageSize: 10 }, // Matches our useState
+                    pagination: {pageIndex: 0, pageSize: 10}, // Matches our useState
                 }}
                 // Customization
                 muiToolbarAlertBannerProps={
                     isError
-                        ? { color: 'error', children: 'Error loading data' }
+                        ? {color: 'error', children: 'Error loading data'}
                         : undefined
                 }
                 // Top Toolbar Actions (e.g., Refresh button)
                 renderTopToolbarCustomActions={() => (
                     <Tooltip arrow title="Refresh Data">
                         <IconButton onClick={() => fetchData()}>
-                            <RefreshIcon />
+                            <RefreshIcon/>
                         </IconButton>
                     </Tooltip>
                 )}
@@ -267,7 +271,7 @@ const LogsTable: React.FC = () => {
                 // MRT has built-in debouncing for text filters
                 columnFilterDebounceMs={500} // Default is 500ms
             />
-        </ThemeProvider>
+        </ThemeProvider></div>
     );
 };
 

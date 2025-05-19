@@ -7,7 +7,7 @@ import AreaDownload from "./area-download";
 import { useCallback, useEffect, useState } from "react";
 import axios, { AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
-
+import SearchUIElastic from "./search-ui-elastic.tsx";
 const ELASTICSEARCHURL = "http://localhost:9200";
 const ELATCIEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
 // const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
@@ -142,6 +142,13 @@ function APIMonitor() {
 
 	return (
 		<div className="p-2">
+			<Row justify="center">
+				<Col span={24}>
+					<Card title="Search through docs ">
+						<SearchUIElastic/>
+					</Card>
+				</Col>
+			</Row>
 			<Row justify="center">
 				<Col span={24}>
 					<Card title="API Response Time">
