@@ -154,19 +154,23 @@ const searchUiConfig = {
 
 const config = {
     alwaysSearchOnInitialLoad: true,
-    apiConnector: apiConnectorInstance, // Make sure this is a valid instance
-    hasA11yNotifications: true,
+    apiConnector: apiConnectorInstance,
+    // hasA11yNotifications: true,
     searchQuery: {
         filters: [],
         search_fields: {
-            message: {} // CORRECTED: Changed from "" to {}
+            message: {
+                weight: 1 // optional
+            }
         },
         result_fields: {
+            _id: {raw: {}},
             message: {
+
                 snippet: {
-                    size: 10
-                },
-                fallback: true,
+                    size: 100,
+                    fallback: true
+                }
             }
         }
     },
@@ -193,6 +197,41 @@ const config = {
     // }
 };
 
+const config_gpt = {
+    alwaysSearchOnInitialLoad: false,
+    apiConnector: apiConnectorInstance,
+    searchQuery: {
+        filters: [],
+
+        // Used for full-text search
+        search_fields: {
+            message: { weight: 1 }
+        },
+
+        // Used for rendering results
+        result_fields: {
+            _id: { raw: {} },
+            message: {
+                snippet: {
+                    size: 100,
+                    fallback: true
+                }
+            },
+            '@timestamp': { raw: {} },
+            // level: { raw: {} },
+            client_ip: { raw: {} }
+        },
+
+        // Used for filterable sidebar facets
+        facets: {
+            level: { type: "value", size: 10 },
+            client_ip: { type: "value", size: 10 }
+            // '@timestamp': { type: "range", ranges: [...] } // optional timestamp range facet
+        }
+    },
+
+
+};
 
 // Custom component to render each result item using AntD Card
 // (CustomResultView remains the same as your provided code)
@@ -221,7 +260,7 @@ const CustomResultView = ({ result }: { result: any }) => {
 function SearchUIElastic() {
     // console.log("Effective SearchUI Config:", JSON.stringify(searchUiConfig, null, 2));
     return (
-        <SearchProvider config={config}>
+        <SearchProvider config={config_gpt}>
             <ErrorBoundary>
                 <Layout style={{ minHeight: '100vh' }}>
                     <Header style={{ display: 'flex', alignItems: 'center', background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, zIndex: 10 }}>

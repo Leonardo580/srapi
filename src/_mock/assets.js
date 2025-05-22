@@ -90,6 +90,15 @@ const DASHBOARD_PERMISSION = {
 			route: "apiMonitor",
 			component: "/apiMonitor/index.tsx",
 		},
+		{
+			id: "8426999229400980",
+			parentId: "9100714781927703",
+			label: "sys.menu.eui",
+			name: "EUI",
+			type: PermissionType.MENU,
+			route: "apiMonitor/search-ui",
+			component: "/apiMonitor/search-ui-elastic.tsx",
+		},
 	],
 };
 const MANAGEMENT_PERMISSION = {

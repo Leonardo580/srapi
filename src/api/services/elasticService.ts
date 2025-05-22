@@ -1,8 +1,5 @@
 import axios from 'axios';
-// Assuming backend-types.ts exists in the same directory or adjust path
-// import { SearchOptions } from './backend-types'; // If you have this defined and it's different from ApiSearchParams
 
-// Define the shape of the paginated response from the backend
 export interface PaginatedResponse<T> {
     data: T[];
     total: number;
@@ -36,6 +33,7 @@ export interface ApiSearchParams {
     };
 }
 
+const DEFAULT_INDEX = import.meta.env.VITE_ELASTICSEARCH_DEFAULT_INDEX;
 class ElasticService {
     private baseUrl: string;
     private readonly URL_FIELD_TO_EXCLUDE = 'url'; // Or 'url', or whatever your primary URL field is
@@ -123,7 +121,17 @@ class ElasticService {
             ...searchParams // Spread any other search options like custom filters, sort, globalSearch
         });
     }
-
+    async getMapping(indexName = DEFAULT_INDEX) {
+        try{
+            return (await axios.get(`${this.baseUrl}/mapping/${indexName}`)).data;
+        }catch (e) {
+            if (axios.isAxiosError(e)) {
+                console.error('Elasticsearch API error:', e);
+            }
+            console.log("Elasticsearch search error (non-API or network issue):", e);
+            throw e;
+        }
+    }
     /**
      * Utility method to create field filters (remains unchanged)
      */

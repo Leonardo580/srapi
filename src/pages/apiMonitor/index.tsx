@@ -1,12 +1,13 @@
 import { Card, Statistic, Col, Row, Space } from "antd";
 import { Table, Tag, Tooltip } from "antd";
 import { CheckCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
-import APIGridTable from "./ag-table";
+import APIGridTable, { GlobalFilterState } from "./ag-table";
 import TotalCard from "./total-card";
 import AreaDownload from "./area-download";
 import { useCallback, useEffect, useState } from "react";
 import axios, { AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
+import GlobalLogFilterForm, { GlobalLogFilterFormProps} from "@/pages/apiMonitor/global-log-filter-form.tsx";
 import SearchUIElastic from "./search-ui-elastic.tsx";
 const ELASTICSEARCHURL = "http://localhost:9200";
 const ELATCIEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
@@ -138,21 +139,31 @@ function APIMonitor() {
 		}
 	}, []);
 
+	const [globalFilter, setGloabalFilter] = useState<GlobalFilterState>()
+	const [isLoading, setIsLoading] = useState(false);
+	const handleApplyGlobalFilters = (filters: any) => {
+		setGloabalFilter(filters);
+	};
+
 
 
 	return (
 		<div className="p-2">
-			<Row justify="center">
-				<Col span={24}>
-					<Card title="Search through docs ">
-						<SearchUIElastic/>
-					</Card>
-				</Col>
-			</Row>
+			{/*<Row justify="center">*/}
+			{/*	<Col span={24}>*/}
+			{/*		<Card title="Search through docs ">*/}
+			{/*			<SearchUIElastic/>*/}
+			{/*		</Card>*/}
+			{/*	</Col>*/}
+			{/*</Row>*/}
 			<Row justify="center">
 				<Col span={24}>
 					<Card title="API Response Time">
-						<APIGridTable />
+						<GlobalLogFilterForm
+							onApplyFilters={handleApplyGlobalFilters}
+							initialFilters={globalFilter}
+						/>
+						<APIGridTable globalQueryFilters={globalFilter}/>
 					</Card>
 				</Col>
 			</Row>
