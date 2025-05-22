@@ -28,7 +28,8 @@ import ElasticService, {
     FieldFilterType,
 } from '@/api/services/elasticService.ts';
 import ColumnManagerDnD, {ColumnDnDItem} from './ColumnManagerDnd.tsx';
-import {FieldMappingInfo, getFlattenedMapping} from '@/utils/mappingHelper.ts'; // Ensure this path is correct
+import {FieldMappingInfo, getFlattenedMapping} from '@/utils/mappingHelper.ts';
+import GlobalLogFilterForm from "@/pages/apiMonitor/global-log-filter-form.tsx"; // Ensure this path is correct
 
 export interface LogEntry {
     _id: string;
@@ -38,7 +39,21 @@ export interface LogEntry {
     client_ip?: string;
     [key: string]: any;
 }
+export interface DynamicFilterItem {
+    field: string;
+    value: any;
+}
 
+export interface GlobalFilterState {
+    mainSearch?: string;
+    level?: string;
+    timestampRange?: [dayjs.Dayjs | null, dayjs.Dayjs | null];
+    additionalFilters?: DynamicFilterItem[];
+}
+
+interface LogsTableProps { // Renamed from APIGridTableProps for clarity with file name
+    globalQueryFilters?: GlobalFilterState; // Allow it to be undefined
+}
 
 // Helper to get color for HTTP status codes
 const getStatusColor = (status: any): string => {
@@ -121,7 +136,7 @@ const discoverAllPaths = (data: LogEntry[]): string[] => {
     return Array.from(paths);
 };
 
-const LogsTable: React.FC = () => {
+const LogsTable: React.FC<LogsTableProps> = ({globalQueryFilters}) => {
     const [data, setData] = useState<LogEntry[]>([]);
     const [dynamicColumns, setDynamicColumns] = useState<MRT_ColumnDef<LogEntry>[]>([]);
     const [isError, setIsError] = useState(false); // Data fetch error
@@ -299,6 +314,8 @@ const LogsTable: React.FC = () => {
     }, [dynamicColumns, columnVisibilityInitialized, processedMapping]);
 
     const fetchData = useCallback(async (forceColumnReset = false) => {
+        console.log('fetchData START', { paginationPg: pagination.pageIndex, globalQueryFilters, colFilters: columnFilters.length }); // Debug log
+
         if (forceColumnReset) {
             setDynamicColumns([]);
             setColumnVisibility({});
@@ -306,114 +323,228 @@ const LogsTable: React.FC = () => {
         }
 
         if ((isMappingLoading || mappingError) && dynamicColumns.length === 0 && !forceColumnReset) {
-            if (!isMappingLoading) setIsLoading(false);
+            if (!isMappingLoading) setIsLoading(false); // Only set if mapping finished
+            console.log('fetchData: Bailing early due to mapping state or empty columns (initial)');
             return;
         }
 
-        if ((dynamicColumns.length === 0 && !data.length && !isMappingLoading && !mappingError) || forceColumnReset) {
+        // Determine loading state
+        const isInitialLoadOrForcedReset = (dynamicColumns.length === 0 && data.length === 0 && !isMappingLoading && !mappingError) || forceColumnReset;
+        if (isInitialLoadOrForcedReset) {
             setIsLoading(true);
+            setIsRefetching(false);
         } else {
             setIsRefetching(true);
+            setIsLoading(false);
         }
 
         const apiParams: ApiSearchParams = {
             page: pagination.pageIndex + 1,
             pageSize: pagination.pageSize,
+            sortFields: sorting.length > 0 ? sorting.map(s => s.id) : ['@timestamp'],
+            sortOrder: sorting.length > 0 ? (sorting[0].desc ? 'desc' : 'asc') : 'desc',
         };
-        apiParams.sortFields = sorting.length > 0 ? sorting.map(s => s.id) : ['@timestamp'];
-        apiParams.sortOrder = sorting.length > 0 ? (sorting[0].desc ? 'desc' : 'asc') : 'desc';
 
-        const activeColumnFilters: ApiFieldFilter[] = columnFilters.map(mrtFilter => {
-            if (!processedMapping) return null;
-            const { id: fieldPath, value: mrtValue } = mrtFilter;
-            const mappingInfo = processedMapping[fieldPath];
-            let apiFilterValue: any = mrtValue;
-            let apiFilterType: FieldFilterType = 'match';
+        let allCombinedApiFilters: ApiFieldFilter[] = [];
 
-            if (!mappingInfo) {
-                if (mrtValue === '' || mrtValue === null || mrtValue === undefined || (Array.isArray(mrtValue) && mrtValue.length === 0)) return null;
-                return { field: fieldPath, value: mrtValue, type: 'match' };
+        // 1. Process Column Filters (your existing MRT column filter logic)
+        if (processedMapping) { // Only process column filters if mapping is available
+            const columnApiFiltersProcessed: ApiFieldFilter[] = columnFilters.map(mrtFilter => {
+                const { id: fieldPath, value: mrtValue } = mrtFilter;
+                const mappingInfo = processedMapping[fieldPath];
+                let apiFilterValue: any = mrtValue;
+                let apiFilterType: FieldFilterType = 'match'; // Default
+
+                if (!mappingInfo) {
+                    if (mrtValue === '' || mrtValue === null || mrtValue === undefined || (Array.isArray(mrtValue) && mrtValue.length === 0)) return null;
+                    return { field: fieldPath, value: String(mrtValue), type: 'match' };
+                }
+
+                // Your existing switch case for mappingInfo.type for MRT filters
+                switch (mappingInfo.type) {
+                    case 'date':
+                        apiFilterType = 'range';
+                        if (Array.isArray(mrtValue) && mrtValue.length === 2) {
+                            const gte = mrtValue[0] ? (mrtValue[0] instanceof Date ? mrtValue[0].toISOString() : String(mrtValue[0])) : undefined;
+                            const lte = mrtValue[1] ? (mrtValue[1] instanceof Date ? mrtValue[1].toISOString() : String(mrtValue[1])) : undefined;
+                            if (gte === undefined && lte === undefined) return null;
+                            apiFilterValue = { gte, lte };
+                        } else { return null; }
+                        break;
+                    case 'long': case 'integer': case 'short': case 'byte': case 'double': case 'float':
+                        apiFilterType = 'range';
+                        if (Array.isArray(mrtValue) && mrtValue.length === 2) {
+                            const gte = (mrtValue[0] !== null && String(mrtValue[0]).trim() !== '') ? Number(mrtValue[0]) : undefined;
+                            const lte = (mrtValue[1] !== null && String(mrtValue[1]).trim() !== '') ? Number(mrtValue[1]) : undefined;
+                            if (gte === undefined && lte === undefined) return null;
+                            apiFilterValue = { gte, lte };
+                            if ((apiFilterValue.gte !== undefined && isNaN(apiFilterValue.gte)) || (apiFilterValue.lte !== undefined && isNaN(apiFilterValue.lte))) return null;
+                        } else if ( (typeof mrtValue === 'number' && !isNaN(mrtValue)) || (typeof mrtValue === 'string' && mrtValue.trim() !== '' && !isNaN(Number(mrtValue))) ) {
+                            apiFilterType = 'term'; apiFilterValue = Number(mrtValue);
+                        } else { return null; }
+                        break;
+                    case 'keyword': case 'constant_keyword': case 'ip': // For MRT column filter, ip usually uses text input
+                        apiFilterType = 'term';
+                        if (Array.isArray(mrtValue) && mrtValue.length > 0) { // For select type filters
+                            apiFilterType = 'terms'; apiFilterValue = mrtValue.map(String);
+                        } else if (mrtValue !== null && mrtValue !== undefined && String(mrtValue).trim() !== '') {
+                            apiFilterValue = String(mrtValue);
+                        } else { return null; }
+                        break;
+                    case 'text': case 'match_only_text':
+                        apiFilterType = 'match'; apiFilterValue = String(mrtValue);
+                        break;
+                    case 'boolean':
+                        apiFilterType = 'term';
+                        if (mrtValue === true || mrtValue === false) apiFilterValue = mrtValue;
+                        else return null;
+                        break;
+                    default:
+                        if (mrtValue === '' || mrtValue === null || mrtValue === undefined ) return null;
+                        apiFilterType = 'match'; apiFilterValue = String(mrtValue);
+                }
+
+                if (apiFilterValue === '' || apiFilterValue === null || apiFilterValue === undefined) return null;
+                if (Array.isArray(apiFilterValue) && apiFilterValue.length === 0) return null;
+                if (apiFilterType === 'range' && typeof apiFilterValue === 'object' && apiFilterValue.gte === undefined && apiFilterValue.lte === undefined) return null;
+                return { field: fieldPath, value: apiFilterValue, type: apiFilterType };
+            }).filter(f => f !== null) as ApiFieldFilter[];
+            allCombinedApiFilters.push(...columnApiFiltersProcessed);
+        }
+
+
+        // 2. Process Global Query Filters (from props)
+        if (globalQueryFilters && processedMapping) {
+            // Main Search
+            if (globalQueryFilters.mainSearch && globalQueryFilters.mainSearch.trim() !== '') {
+                allCombinedApiFilters.push({
+                    field: 'message', // Or your primary search field for global search
+                    value: globalQueryFilters.mainSearch.trim(),
+                    type: 'match_phrase', // Or 'match'
+                });
+            }
+            // Level filter
+            if (globalQueryFilters.level && globalQueryFilters.level !== '') {
+                allCombinedApiFilters.push({ field: 'level', value: globalQueryFilters.level, type: 'term' });
+            }
+            // Timestamp range filter (global)
+            if (globalQueryFilters.timestampRange) {
+                const [startDayjs, endDayjs] = globalQueryFilters.timestampRange;
+                const gte = startDayjs ? startDayjs.toISOString() : undefined;
+                const lte = endDayjs ? endDayjs.toISOString() : undefined;
+                if (gte || lte) {
+                    allCombinedApiFilters.push({ field: '@timestamp', value: { gte, lte }, type: 'range' });
+                }
             }
 
-            switch (mappingInfo.type) {
-                case 'date':
-                    apiFilterType = 'range';
-                    if (Array.isArray(mrtValue) && mrtValue.length === 2) {
-                        // mrtValue items are now Date objects from DateTimePicker
-                        const gte = mrtValue[0] ? (mrtValue[0] instanceof Date ? mrtValue[0].toISOString() : String(mrtValue[0])) : undefined;
-                        const lte = mrtValue[1] ? (mrtValue[1] instanceof Date ? mrtValue[1].toISOString() : String(mrtValue[1])) : undefined;
-                        if (gte === undefined && lte === undefined) return null;
-                        apiFilterValue = { gte, lte };
-                    } else if (mrtValue instanceof Date) { // Should not happen with range picker
-                        apiFilterType = 'term'; apiFilterValue = mrtValue.toISOString();
-                    } else { return null; }
-                    break;
-                case 'long': case 'integer': case 'short': case 'byte': case 'double': case 'float':
-                    apiFilterType = 'range';
-                    if (Array.isArray(mrtValue) && mrtValue.length === 2) {
-                        const gte = (mrtValue[0] !== null && mrtValue[0] !== '') ? Number(mrtValue[0]) : undefined;
-                        const lte = (mrtValue[1] !== null && mrtValue[1] !== '') ? Number(mrtValue[1]) : undefined;
-                        if (gte === undefined && lte === undefined) return null;
-                        apiFilterValue = { gte, lte };
-                        if ((apiFilterValue.gte !== undefined && isNaN(apiFilterValue.gte)) || (apiFilterValue.lte !== undefined && isNaN(apiFilterValue.lte))) return null;
-                    } else if (typeof mrtValue === 'number' && !isNaN(mrtValue)) {
-                        apiFilterType = 'term'; apiFilterValue = mrtValue;
-                    } else if (typeof mrtValue === 'string' && mrtValue.trim() !== '' && !isNaN(Number(mrtValue))) {
-                        apiFilterType = 'term'; apiFilterValue = Number(mrtValue);
-                    } else { return null; }
-                    break;
-                case 'keyword': case 'constant_keyword': case 'ip':
-                    if (Array.isArray(mrtValue) && mrtValue.length > 0) {
-                        apiFilterType = 'terms'; apiFilterValue = mrtValue.map(String);
-                    } else if (mrtValue !== null && mrtValue !== undefined && String(mrtValue).trim() !== '') {
-                        apiFilterType = 'term'; apiFilterValue = String(mrtValue);
-                    } else { return null; }
-                    break;
-                case 'text': case 'match_only_text':
-                    apiFilterType = 'match'; apiFilterValue = String(mrtValue);
-                    break;
-                case 'boolean':
-                    apiFilterType = 'term';
-                    if (mrtValue === true || mrtValue === false) apiFilterValue = mrtValue;
-                    else return null;
-                    break;
-                default: apiFilterType = 'match'; apiFilterValue = String(mrtValue);
+            // Process additionalFilters from global form
+            if (globalQueryFilters.additionalFilters) {
+                globalQueryFilters.additionalFilters.forEach(dynFilter => {
+                    if (!dynFilter.field || dynFilter.value === undefined || dynFilter.value === null) {
+                        return; // Skip invalid dynamic filters
+                    }
+                    const fieldInfo = processedMapping[dynFilter.field];
+                    if (!fieldInfo) {
+                        const valueStr = typeof dynFilter.value === 'object' ? JSON.stringify(dynFilter.value) : String(dynFilter.value);
+                        if (valueStr.trim() === '' || valueStr === '{}' || valueStr === '[]') return;
+                        console.warn(`Mapping not found for dynamic filter field: ${dynFilter.field}. Using default 'match'.`);
+                        allCombinedApiFilters.push({ field: dynFilter.field, value: String(dynFilter.value), type: 'match'});
+                        return;
+                    }
+
+                    let dynamicApiValue: any = dynFilter.value;
+                    let dynamicApiType: FieldFilterType = 'term';
+
+                    switch (fieldInfo.type.toLowerCase()) {
+                        case 'date':
+                            dynamicApiType = 'range';
+                            if (Array.isArray(dynFilter.value) && dynFilter.value.length === 2) {
+                                const gte = dynFilter.value[0] ? (dynFilter.value[0] as dayjs.Dayjs).toISOString() : undefined;
+                                const lte = dynFilter.value[1] ? (dynFilter.value[1] as dayjs.Dayjs).toISOString() : undefined;
+                                if (!gte && !lte) return;
+                                dynamicApiValue = { gte, lte };
+                            } else { return; }
+                            break;
+                        case 'ip':
+                            dynamicApiType = 'range';
+                            if (typeof dynFilter.value === 'object' && dynFilter.value !== null) {
+                                const gte = (dynFilter.value as any).from?.trim() || undefined;
+                                const lte = (dynFilter.value as any).to?.trim() || undefined;
+                                if (!gte && !lte) return;
+                                dynamicApiValue = { gte, lte };
+                            } else { return; }
+                            break;
+                        case 'long': case 'integer': case 'short': case 'byte': case 'double': case 'float': case 'scaled_float':
+                            dynamicApiValue = Number(dynFilter.value);
+                            if (isNaN(dynamicApiValue)) return;
+                            dynamicApiType = 'term';
+                            break;
+                        case 'boolean':
+                            dynamicApiValue = dynFilter.value;
+                            dynamicApiType = 'term';
+                            break;
+                        case 'keyword':
+                            dynamicApiValue = String(dynFilter.value);
+                            dynamicApiType = 'term';
+                            break;
+                        case 'text':
+                            dynamicApiValue = String(dynFilter.value);
+                            dynamicApiType = 'match';
+                            break;
+                        default:
+                            if (String(dynFilter.value).trim() === '') return;
+                            dynamicApiValue = String(dynFilter.value);
+                            dynamicApiType = 'match';
+                    }
+                    allCombinedApiFilters.push({ field: dynFilter.field, value: dynamicApiValue, type: dynamicApiType });
+                });
             }
+        } else if (globalQueryFilters && !processedMapping) {
+            console.warn("fetchData: globalQueryFilters exist but processedMapping is null. Global filters may not be applied correctly.");
+        }
 
-            if (apiFilterValue === '' || apiFilterValue === null || apiFilterValue === undefined) return null;
-            if (Array.isArray(apiFilterValue) && apiFilterValue.length === 0) return null;
-            if (apiFilterType === 'range' && typeof apiFilterValue === 'object' && apiFilterValue.gte === undefined && apiFilterValue.lte === undefined) return null;
-            return { field: fieldPath, value: apiFilterValue, type: apiFilterType };
-        }).filter(f => f !== null) as ApiFieldFilter[];
 
-        if (activeColumnFilters.length > 0) apiParams.filters = activeColumnFilters;
+        if (allCombinedApiFilters.length > 0) {
+            apiParams.filters = allCombinedApiFilters;
+        }
+        console.log('fetchData: API PARAMS:', JSON.stringify(apiParams, null, 2));
+
 
         try {
             const result = await ElasticService.getData(apiParams.page, apiParams.pageSize, {
                 sortFields: apiParams.sortFields, sortOrder: apiParams.sortOrder, filters: apiParams.filters,
             });
-            setData(result.data); setRowCount(result.total);
+            console.log('fetchData: API RESULT total:', result.total);
+            setData(result.data);
+            setRowCount(result.total);
             if (processedMapping && (dynamicColumns.length === 0 || forceColumnReset) && result.data.length > 0) {
                 const newColumns = generateColumns(result.data);
                 setDynamicColumns(newColumns);
             }
             setIsError(false);
         } catch (error) {
-            setIsError(true); console.error('Failed to fetch logs:', error);
+            setIsError(true);
+            console.error('Failed to fetch logs:', error);
         } finally {
-            setIsLoading(false); setIsRefetching(false);
+            setIsLoading(false);
+            setIsRefetching(false);
+            console.log('fetchData END');
         }
     }, [
-        pagination, sorting, columnFilters, processedMapping, isMappingLoading, mappingError,
-        dynamicColumns.length, generateColumns, data.length
+        pagination, sorting, columnFilters, // MRT state filters
+        processedMapping, isMappingLoading, mappingError, // Mapping and its state
+        dynamicColumns.length, generateColumns, data.length, // Column generation and data state (length for dep)
+        globalQueryFilters // The new global filters from props
     ]);
 
+    // The useEffect that calls fetchData initially and when dependencies change
     useEffect(() => {
-        if (!isMappingLoading && !mappingError) {
+        if (!isMappingLoading && !mappingError) { // Wait for mapping to be ready
             fetchData();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isMappingLoading, mappingError, fetchData]);
+        // No explicit fetchData in deps for initial load, but fetchData itself changes
+        // when its own dependencies (like globalQueryFilters, pagination) change.
+    }, [isMappingLoading, mappingError, fetchData, GlobalLogFilterForm]);
 
     const muiTheme = useMemo(() => createTheme({ palette: { mode: 'light' } }), []);
 
