@@ -1,6 +1,6 @@
-import { Card, Statistic, Col, Row, Space } from "antd";
+import { Card, Statistic, Col, Row, Space, Button } from "antd";
 import { Table, Tag, Tooltip } from "antd";
-import { CheckCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined, InfoCircleOutlined, ExperimentOutlined } from "@ant-design/icons";
 import APIGridTable, { GlobalFilterState } from "./ag-table";
 import TotalCard from "./total-card";
 import AreaDownload from "./area-download";
@@ -11,6 +11,7 @@ import GlobalLogFilterForm, { GlobalLogFilterFormProps} from "@/pages/apiMonitor
 import SearchUIElastic from "./search-ui-elastic.tsx";
 import { useLogsData } from "@/hooks/elasticsearch/useLogsData.ts";
 import LogsTable from "./ag-table";
+import Title from "antd/es/skeleton/Title";
 const ELASTICSEARCHURL = "http://localhost:9200";
 const ELATCIEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
 // const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
@@ -32,49 +33,60 @@ function APIMonitor() {
 
 
 	return (
-		<div className="p-2">
-			{/*<Row justify="center">*/}
-			{/*	<Col span={24}>*/}
-			{/*		<Card title="Search through docs ">*/}
-			{/*			<SearchUIElastic/>*/}
-			{/*		</Card>*/}
-			{/*	</Col>*/}
-			{/*</Row>*/}
-			<Row justify="center">
+		<div>
+			<Title level={3} style={{ marginBottom: '24px' }}>Log Monitoring Dashboard</Title>
+
+			<Row gutter={[24, 24]}> {/* Main gutter for sections */}
 				<Col span={24}>
-					<Card title="Filter Logs">
+					<Card
+						title={
+							<Space>
+								<ExperimentOutlined />
+								Advanced Log Filters
+							</Space>
+						}
+						bordered={false}
+						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.09)' }}
+					>
 						<GlobalLogFilterForm
 							onApplyFilters={handleApplyGlobalFilters}
 							initialFilters={logDataHook.currentGlobalFilters}
-							loading={logDataHook.isLoading || logDataHook.isRefetching}
+							loading={logDataHook.isLoading || logDataHook.isRefetching || logDataHook.isMappingLoading}
 						/>
 					</Card>
-					<Card style={{ marginTop: '16px' }}>
+				</Col>
+
+				<Col span={24}>
+					<Card
+						title="Log Entries"
+						bordered={false}
+						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.09)' }}
+						bodyStyle={{ padding: logDataHook.data.length === 0 && !logDataHook.isLoading ? '0' : '24px' }} // Remove padding if table is empty and not loading
+					>
 						<LogsTable logDataHook={logDataHook} />
 					</Card>
 				</Col>
-			</Row>
-			<Row gutter={[16, 16]} className="mt-8" justify="space-between">
-				<Col span={24} md={8}>
+
+				{/* Your existing stats cards */}
+				<Col xs={24} lg={8}>
 					<TotalCard
-						title="Total API requests"
-						increase={false}
-						count="18,765"
-						percent="2.6%"
+						title="Total API requests Today"
+						increase={false} // This should be dynamic based on actual data
+						count="18,765" // Dynamic
+						percent="2.6%" // Dynamic
 						chartData={[22, 8, 35, 50, 82, 84, 77, 12, 87, 43]}
-					></TotalCard>
-					<div className="mt-4">
+					/>
+					<div style={{ marginTop: '24px' }}>
 						<TotalCard
-							title="Your API requests"
-							increase={true}
-							count="458"
-							percent="4.6%"
+							title="Your API requests Today"
+							increase={true} // Dynamic
+							count="458" // Dynamic
+							percent="4.6%" // Dynamic
 							chartData={[4, 21, 25, 36, 5, 8, 45, 7, 12, 8]}
-						></TotalCard>
+						/>
 					</div>
 				</Col>
-
-				<Col span={24} md={16}>
+				<Col xs={24} lg={16}>
 					<AreaDownload />
 				</Col>
 			</Row>
