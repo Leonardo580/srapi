@@ -9,140 +9,24 @@ import axios, { AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
 import GlobalLogFilterForm, { GlobalLogFilterFormProps} from "@/pages/apiMonitor/global-log-filter-form.tsx";
 import SearchUIElastic from "./search-ui-elastic.tsx";
+import { useLogsData } from "@/hooks/elasticsearch/useLogsData.ts";
+import LogsTable from "./ag-table";
 const ELASTICSEARCHURL = "http://localhost:9200";
 const ELATCIEARCH_INDEX = ".ds-logs-generic-default-2025.05.02-000001";
 // const ELASTICSEARCH_ENDPOINT =  `${ELASTICSEARCHURL}/${ELATCIEARCH_INDEX}/_search`;
 const ELASTICSEARCH_ENDPOINT = `/elasticsearch/${ELATCIEARCH_INDEX}/_search`;
 
 function APIMonitor() {
-	const [cardData, setCardData] = useState({
-		loading: true,
-		count: 0,
-		percent: "0%",
-		increase: false,
-		chartData: [],
-	});
 
-	const [prevPercent, setPrevPercent] = useState(0);
-	const [chartdata, setChartdata] = useState([]);
 
-	const fetchData = useCallback(async () => {
-		const esQuery = {
-			size: 0,
-			query: {
-				range: {
-					timestamp: {
-						gte: "now-1d/d",
-						lte: "now/d",
-					},
-				},
-			},
-		};
 
-		const config: AxiosRequestConfig = {
-			headers: {
-				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:changeme"),
-			},
-		};
-		try {
-			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
-			if (response.status == 200) {
-				const count = response.data?.total?.value || 0;
-				const percentChange = prevPercent > 0 ? ((count - prevPercent) / prevPercent) * 100 : 100;
 
-				setCardData((prev) => ({
-					...prev,
-					loading: false,
-					count,
-					percent: `${Math.abs(percentChange)}%`,
-					increase: percentChange >= 0,
-				}));
-			} else {
-				console.warn("No hits found in Elasticsearch response or response format unexpected.");
-			}
-		} catch (e) {
-			toast.error(e.message);
-		}
-	}, [prevPercent]);
 
-	const fetchPrevData = useCallback(async () => {
-		const esQuery = {
-			size: 0,
-			query: {
-				range: {
-					timestamp: {
-						gte: "now-2d/d",
-						lt: "now-1d/d",
-					},
-				},
-			},
-		};
+	const logDataHook = useLogsData({});
 
-		const config: AxiosRequestConfig = {
-			headers: {
-				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:changeme"),
-			},
-		};
-		try {
-			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
-			if (response.status == 200) {
-				setPrevPercent(response.data?.total?.value || 0);
-			}
-		} catch (e) {
-			toast.error(e.message);
-		}
-	}, []);
-
-	const fetchChartData = useCallback(async () => {
-		const esQuery = {
-			size: 0,
-			query: {
-				range: {
-					timestamp: {
-						gte: "now-7d/d",
-						lte: "now/d",
-					},
-				},
-			},
-			aggs: {
-				requests_over_time: {
-					date_histogram: {
-						field: "timestamp",
-						calendar_interval: "day",
-						min_doc_count: 0,
-					},
-				},
-			},
-		};
-
-		const config: AxiosRequestConfig = {
-			headers: {
-				"Content-Type": "application/json",
-				authorization: "Basic " + btoa("elastic:changeme"),
-			},
-		};
-		try {
-			const response = await axios.post(ELASTICSEARCH_ENDPOINT, esQuery, config);
-			if (response.status == 200) {
-				const newChartData =
-					response.data?.aggregations?.requests_over_time?.buckets?.map((bucket) => bucket.doc_count) || [];
-				setChartdata(newChartData);
-				setCardData((prev) => ({
-					...prev,
-					chartData: newChartData,
-				}));
-			}
-		} catch (e) {
-			toast.error(e.message);
-		}
-	}, []);
-
-	const [globalFilter, setGloabalFilter] = useState<GlobalFilterState>()
-	const [isLoading, setIsLoading] = useState(false);
-	const handleApplyGlobalFilters = (filters: any) => {
-		setGloabalFilter(filters);
+	const handleApplyGlobalFilters = (filters: GlobalFilterState) => {
+		logDataHook.setGlobalFilters(filters);
+		// The hook's internal useEffect will now trigger fetchData
 	};
 
 
@@ -158,12 +42,15 @@ function APIMonitor() {
 			{/*</Row>*/}
 			<Row justify="center">
 				<Col span={24}>
-					<Card title="API Response Time">
+					<Card title="Filter Logs">
 						<GlobalLogFilterForm
 							onApplyFilters={handleApplyGlobalFilters}
-							initialFilters={globalFilter}
+							initialFilters={logDataHook.currentGlobalFilters}
+							loading={logDataHook.isLoading || logDataHook.isRefetching}
 						/>
-						<APIGridTable globalQueryFilters={globalFilter}/>
+					</Card>
+					<Card style={{ marginTop: '16px' }}>
+						<LogsTable logDataHook={logDataHook} />
 					</Card>
 				</Col>
 			</Row>
